@@ -15,35 +15,6 @@ Este proyecto corresponde al **Trabajo Práctico Final Obligatorio (TPO)** de la
   - ✅ **Observer** - Eventos de dominio y notificaciones
   - ✅ **Adapter** + **Facade** - Envío de notificaciones
   - ✅ **Factory** - Creación de estrategias de emparejamiento
-  - ✅ **Singleton** - Repositorios en memoria
-
-## 🏗️ Arquitectura
-
-El proyecto sigue una arquitectura en capas con separación clara de responsabilidades:
-
-```
-src/main/java/
-├── app/                    # Bootstrap y configuración inicial
-├── domain/                 # Capa de dominio
-│   ├── model/             # Entidades de negocio
-│   ├── match/
-│   │   ├── strategy/      # Patrón Strategy
-│   │   └── state/         # Patrón State
-│   └── notify/observer/   # Patrón Observer
-├── application/            # Servicios de aplicación (casos de uso)
-├── ports/                  # Contratos (interfaces)
-│   ├── notifications/    # EmailSender, PushSender
-│   └── persistence/      # Repositorios
-├── adapters/              # Implementaciones concretas
-│   ├── email/            # Adapter para emails
-│   ├── push/             # Adapter para push notifications
-│   └── persistence/      # Repositorios InMemory
-├── facade/                # Patrón Facade para notificaciones
-├── ui/swing/              # Interfaz gráfica Swing
-│   ├── controllers/      # Controllers MVC
-│   └── views/            # Vistas Swing
-└── shared/               # DTOs y utilidades compartidas
-```
 
 ## 🧩 Patrones de Diseño Implementados
 
@@ -91,10 +62,6 @@ El `NotificadorPorPreferencia` suscribe a estos eventos y envía notificaciones 
 ### 5. **Factory** - Creación de Estrategias
 
 `EmparejamientoStrategyFactory` centraliza la creación de estrategias de emparejamiento, permitiendo crear instancias por nombre.
-
-### 6. **Singleton** - Repositorios
-
-Los repositorios `InMemoryPartidoRepository` e `InMemoryUsuarioRepository` implementan el patrón Singleton para mantener una única instancia en memoria.
 
 ## 🚀 Cómo Ejecutar
 
