@@ -1,0 +1,296 @@
+@startuml
+!theme plain
+skinparam classAttributeIconSize 0
+
+package "domain.model" {
+    class Usuario {
+        - UUID id
+        - String username
+        - String email
+        - String passwordHash
+        - String deporteFavorito
+        - NivelJuego nivelJuego
+        - GeoPoint ubicacion
+        - TipoNotificacion preferenciaNotificacion
+    }
+
+    class Partido {
+        - UUID id
+        - String deporte
+        - int cupoRequerido
+        - int duracion
+        - GeoPoint ubicacion
+        - Instant fechaHora
+        - PartidoState estado
+        - List<Usuario> jugadores
+        + agregarJugador(Usuario)
+        + confirmar()
+        + iniciar(Clock)
+        + finalizar()
+        + cancelar()
+    }
+
+    class GeoPoint {
+        - double latitud
+        - double longitud
+        + distanciaA(GeoPoint): double
+    }
+
+    enum NivelJuego {
+        PRINCIPIANTE
+        INTERMEDIO
+        AVANZADO
+    }
+
+    enum TipoNotificacion {
+        EMAIL
+        PUSH
+    }
+
+    Usuario "1..*" --> Partido : jugadores
+    Usuario --> GeoPoint : ubicacion
+    Usuario --> NivelJuego
+    Usuario --> TipoNotificacion
+    Partido --> GeoPoint : ubicacion
+}
+
+package "domain.model.match.state" <<State>> {
+    interface PartidoState {
+        + intentarAgregarJugador(Partido, Usuario)
+        + confirmar(Partido)
+        + iniciar(Partido, Clock)
+        + finalizar(Partido)
+        + cancelar(Partido)
+        + tipo(): EstadoTipo
+    }
+
+    class NecesitamosJugadoresState {
+        - DomainEventPublisher eventPublisher
+    }
+
+    class ArmadoState {
+        - DomainEventPublisher eventPublisher
+    }
+
+    class ConfirmadoState {
+        - DomainEventPublisher eventPublisher
+    }
+
+    class EnJuegoState {
+        - DomainEventPublisher eventPublisher
+    }
+
+    class FinalizadoState
+    class CanceladoState
+
+    enum EstadoTipo {
+        NECESITAMOS_JUGADORES
+        ARMADO
+        CONFIRMADO
+        EN_JUEGO
+        FINALIZADO
+        CANCELADO
+    }
+
+    PartidoState <|.. NecesitamosJugadoresState
+    PartidoState <|.. ArmadoState
+    PartidoState <|.. ConfirmadoState
+    PartidoState <|.. EnJuegoState
+    PartidoState <|.. FinalizadoState
+    PartidoState <|.. CanceladoState
+    Partido --> PartidoState : estado
+    PartidoState --> EstadoTipo
+}
+
+package "domain.model.match.strategy" <<Strategy>> {
+    interface EmparejamientoStrategy {
+        + filtrarCandidatos(Partido, List<Usuario>): List<Usuario>
+        + nombre(): String
+    }
+
+    class EmparejamientoPorNivel
+    class EmparejamientoPorCercania
+    class EmparejamientoPorHistorial
+
+    class EmparejamientoStrategyFactory <<Factory>> {
+        + {static} crear(String): EmparejamientoStrategy
+        + {static} todas(): List<EmparejamientoStrategy>
+        + {static} nombres(): List<String>
+    }
+
+    EmparejamientoStrategy <|.. EmparejamientoPorNivel
+    EmparejamientoStrategy <|.. EmparejamientoPorCercania
+    EmparejamientoStrategy <|.. EmparejamientoPorHistorial
+    EmparejamientoStrategyFactory ..> EmparejamientoStrategy : creates
+}
+
+package "domain.notify.observer" <<Observer>> {
+    interface DomainEvent
+    interface DomainEventSubscriber {
+        + onEvent(DomainEvent)
+    }
+
+    class DomainEventPublisher {
+        - Map<Class, List<DomainEventSubscriber>> subscribers
+        + publish(DomainEvent)
+        + subscribe(Class, DomainEventSubscriber)
+        + unsubscribe(Class, DomainEventSubscriber)
+    }
+
+    class NotificadorPorPreferencia {
+        - NotificationFacade notificationFacade
+        - PartidoRepository partidoRepository
+    }
+
+    package "events" {
+        class PartidoCreado
+        class PartidoArmado
+        class PartidoConfirmado
+        class PartidoEnJuego
+        class PartidoFinalizado
+        class PartidoCancelado
+    }
+
+    DomainEvent <|.. PartidoCreado
+    DomainEvent <|.. PartidoArmado
+    DomainEvent <|.. PartidoConfirmado
+    DomainEvent <|.. PartidoEnJuego
+    DomainEvent <|.. PartidoFinalizado
+    DomainEvent <|.. PartidoCancelado
+    DomainEventSubscriber <|.. NotificadorPorPreferencia
+    DomainEventPublisher --> DomainEventSubscriber
+}
+
+package "ports.notifications" {
+    interface EmailSender {
+        + send(String, String, String)
+    }
+
+    interface PushSender {
+        + send(String, String, String)
+    }
+}
+
+package "adapters" <<Adapter>> {
+    class JavaMailEmailSender {
+    }
+
+    class FirebasePushSender {
+    }
+
+    EmailSender <|.. JavaMailEmailSender
+    PushSender <|.. FirebasePushSender
+}
+
+package "facade" <<Facade>> {
+    class NotificationFacade {
+        - EmailSender emailSender
+        - PushSender pushSender
+        + notifyUser(Usuario, String, String)
+    }
+
+    NotificationFacade --> EmailSender
+    NotificationFacade --> PushSender
+    NotificadorPorPreferencia --> NotificationFacade
+}
+
+package "ports.persistence" {
+    interface PartidoRepository {
+        + save(Partido): Partido
+        + findById(UUID): Optional<Partido>
+        + findAll(): List<Partido>
+        + search(BusquedaPartidosCriteria): List<Partido>
+    }
+
+    interface UsuarioRepository {
+        + save(Usuario): Usuario
+        + findById(UUID): Optional<Usuario>
+        + findByUsername(String): Optional<Usuario>
+        + findByEmail(String): Optional<Usuario>
+    }
+}
+
+package "adapters.persistence" <<Adapter, Singleton>> {
+    class InMemoryPartidoRepository {
+        - Map<UUID, Partido> partidos
+        + {static} getInstance(): InMemoryPartidoRepository
+    }
+
+    class InMemoryUsuarioRepository {
+        - Map<UUID, Usuario> usuarios
+        + {static} getInstance(): InMemoryUsuarioRepository
+    }
+
+    PartidoRepository <|.. InMemoryPartidoRepository
+    UsuarioRepository <|.. InMemoryUsuarioRepository
+}
+
+package "application" {
+    class RegistrarUsuarioService {
+        - UsuarioRepository usuarioRepository
+        + register(RegistrarUsuarioCmd): Usuario
+    }
+
+    class BuscarPartidosService {
+        - PartidoRepository partidoRepository
+        + search(BusquedaPartidosCriteria): List<Partido>
+    }
+
+    class CrearPartidoService {
+        - PartidoRepository partidoRepository
+        - DomainEventPublisher eventPublisher
+        + create(CrearPartidoCmd, UUID): Partido
+    }
+
+    class GestionEstadoPartidoService {
+        - PartidoRepository partidoRepository
+        - UsuarioRepository usuarioRepository
+        - Clock clock
+        + agregarJugador(UUID, UUID)
+        + confirmar(UUID)
+        + iniciarSiCorresponde(UUID)
+        + finalizar(UUID)
+        + cancelar(UUID)
+    }
+}
+
+package "ui.swing.controllers" {
+    class RegistroController
+    class PartidosController
+    class CrearPartidoController
+    class GestionEstadoController
+}
+
+package "ui.swing.views" {
+    class VentanaPrincipal
+    class PanelLogin
+    class PanelBuscarPartidos
+    class PanelCrearPartido
+    class PanelGestionEstado
+}
+
+' Relaciones principales
+RegistrarUsuarioService --> UsuarioRepository
+BuscarPartidosService --> PartidoRepository
+CrearPartidoService --> PartidoRepository
+CrearPartidoService --> DomainEventPublisher
+GestionEstadoPartidoService --> PartidoRepository
+GestionEstadoPartidoService --> UsuarioRepository
+
+RegistroController --> RegistrarUsuarioService
+PartidosController --> BuscarPartidosService
+PartidosController --> GestionEstadoPartidoService
+CrearPartidoController --> CrearPartidoService
+GestionEstadoController --> GestionEstadoPartidoService
+
+VentanaPrincipal --> PartidosController
+PanelLogin --> RegistroController
+PanelBuscarPartidos --> PartidosController
+PanelCrearPartido --> CrearPartidoController
+PanelGestionEstado --> GestionEstadoController
+
+Partido --> EmparejamientoStrategy : usa
+Partido --> DomainEventPublisher : publica eventos
+
+@enduml
+

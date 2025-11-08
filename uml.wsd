@@ -1,0 +1,524 @@
+@startuml
+
+
+skinparam class {
+   BackgroundColor none
+   ArrowColor black
+   BorderColor black
+}
+
+
+skinparam packageStyle rectangle
+
+
+namespace controladores {
+
+
+    ' =========== CLASES ==========
+    class RegistroController {
+        - UsuarioServiceFacade servicioUsuario
+        + Usuario registrar(RegistrarUsuarioCmd cmd)
+    }
+
+    class PartidosController {
+        - BuscarPartidosServiceFacade servicioBuscarPartidos
+        - GestionEstadoPartidoServiceFacade servicioGestionEstado
+
+        + List<Partido> buscarPartidos(BusquedaPartidosCriteria criteria)
+        + List<Partido> listarTodos()
+        + void unirseAPartido(int partidoId)
+        + void confirmarPartido(int partidoId)
+        + void agregarEstadistica(int idPartido)
+        + void cerrarSesion()
+    }
+
+    class CrearPartidoController {
+        - CrearPartidoServiceFacade servicioCrearPartido
+        
+        + Partido crearPartido(CrearPartidoCmd cmd)
+    }
+
+    class GestionEstadoController {
+        - GestionEstadoPartidoServiceFacade servicioGestionEstado
+        - PartidoRepository repositorioPartido
+
+        + void confirmar(int partidoId)
+        + Partido obtenerPartido(int partidoId)
+    }
+
+    class AuthController {
+        - UsuarioRepository repositorioUsuario
+        - PartidoPendienteConfirmacionRepository repositorioPendientes
+        + Usuario login(String nombreUsuario, String contrasena)
+        + List<int> obtenerPartidosPendientes(int usuarioId)
+        + void eliminarPartidoPendiente(int usuarioId, int partidoId)
+    }
+
+    class EstadisticasController {
+        - CargarEstadisticasService servicioCargarEstadisticas
+        - PartidoRepository repositorioPartido
+        + EstadisticasPartido obtenerEstadisticas(int partidoId)
+    }
+}
+
+controladores.RegistroController "1..1" o-- "1..1" servicios.UsuarioServiceFacade : invoca
+controladores.PartidosController "1..1" o-- "1..1" servicios.BuscarPartidosServiceFacade : invoca
+controladores.PartidosController "1..1" o-- "1..1" servicios.GestionEstadoPartidoServiceFacade : invoca
+controladores.CrearPartidoController "1..1" o-- "1..1" servicios.CrearPartidoServiceFacade : invoca
+controladores.GestionEstadoController "1..1" o-- "1..1" servicios.GestionEstadoPartidoServiceFacade : invoca
+controladores.AuthController "1..1" o-- "1..1" servicios.UsuarioServiceFacade : invoca
+controladores.EstadisticasController --> servicios.CargarEstadisticasService : usa
+controladores.EstadisticasController --> servicios.PartidoRepository : usa
+
+namespace servicios {
+
+   ' =========== JUSTIFICACIÓN DE CLASES ABSTRACTAS ==========
+   ' Las clases abstractas (Deporte, NivelJuego, Zona, TipoNotificacion, TipoFiltro) se utilizan
+   ' en lugar de enums para cumplir con el principio Open/Closed de SOLID:
+   ' - ABIERTO para extensión: Se pueden agregar nuevas subclases sin modificar código existente
+   ' - CERRADO para modificación: El código que usa estas clases no necesita cambios
+   ' - Permiten polimorfismo: Comportamiento específico por tipo mediante herencia
+   ' - Facilita testing: Se pueden crear mocks/stubs fácilmente
+   ' - Ejemplo: Agregar "Básquet" como nuevo Deporte solo requiere crear la clase Básquet extends Deporte
+
+   ' =========== CLASES ==========
+
+   
+    class UsuarioServiceFacade {
+        - UsuarioRepository repositorioUsuario
+        + Usuario registrar(RegistrarUsuarioCmd cmd)
+    }
+
+    class BuscarPartidosServiceFacade {
+        - PartidoRepository repositorioPartido
+        + List<Partido> buscar(BusquedaPartidosCriteria criteria, Usuario usuarioActual)
+        + List<Partido> listarTodos()
+    }
+
+    class CrearPartidoServiceFacade {
+        - PartidoRepository repositorioPartido
+        - UsuarioRepository repositorioUsuario
+        - INotificadorObserver publicadorEventos
+        + Partido crear(CrearPartidoCmd cmd, int creadorId)
+    }
+
+    class GestionEstadoPartidoServiceFacade {
+        - PartidoRepository repositorioPartido
+        - UsuarioRepository repositorioUsuario
+        - PartidoHistorialRepository repositorioHistorial
+        - INotificadorObserver publicadorEventos
+        - Clock reloj
+        + void agregarJugador(int partidoId, int usuarioId)
+        + void confirmar(int partidoId, int usuarioId)
+        + void iniciarSiCorresponde(int partidoId)
+        + void finalizarSiCorresponde(int partidoId)
+        + void cancelar(int partidoId)
+        + List<Usuario> buscarCandidatos(int partidoId, String nombreEstrategia)
+        + void agregarEstadistica(int partidoId, CargarEstadisticasCmd cmd)
+    }
+
+
+    ' Clase abstracta Deporte: Permite extender nuevos deportes sin modificar código existente (Open/Closed)
+    ' Cada deporte puede tener comportamiento específico (polimorfismo)
+    abstract class Deporte {
+        + {abstract} String obtenerTipoDeporte()
+    }
+
+    class Futbol extends Deporte {
+        + String obtenerTipoDeporte()
+    }
+
+    class Tenis extends Deporte {
+        + String obtenerTipoDeporte()
+    }
+
+    ' Clase abstracta NivelJuego: Facilita agregar nuevos niveles (ej: Profesional) sin cambiar código
+    ' Permite polimorfismo en estrategias de emparejamiento basadas en nivel
+    abstract class NivelJuego {
+        + {abstract} String obtenerNivel()
+    }
+
+    class Principiante extends NivelJuego {
+        + String obtenerNivel()
+    }
+
+    class Intermedio extends NivelJuego {
+        + String obtenerNivel()
+    }
+
+    class Avanzado extends NivelJuego {
+        + String obtenerNivel()
+    }
+
+    ' Clase abstracta Zona: Extensible para nuevas zonas geográficas
+    ' Permite implementar lógica específica por zona (ej: cálculo de distancia)
+    abstract class Zona {
+        + String cambiarZona()
+    }
+
+
+    class ZonaSur extends Zona {
+        + String cambiarZona()
+    }
+
+    class ZonaNorte extends Zona {
+        + String cambiarZona()
+    }
+
+    class ZonaOeste extends Zona {
+        + String cambiarZona()
+    }
+
+    class ZonaEste extends Zona {
+        + String cambiarZona()
+    }
+
+    ' Clase abstracta TipoNotificacion: Permite agregar nuevos canales (SMS, WhatsApp) sin modificar código
+    ' Facilita el patrón Strategy para diferentes métodos de notificación
+    abstract class TipoNotificacion {
+        + {abstract} String obtenerTipoNotificacion()
+    }
+
+    class Email extends TipoNotificacion {
+        + String obtenerTipoNotificacion()
+    }
+
+    class Push extends TipoNotificacion {
+        + String obtenerTipoNotificacion()
+    }
+
+    class Usuario {
+        - int id
+        - String nombreUsuario
+        - String correo
+        - String hashContrasena
+        - Deporte deporteFavorito
+        - NivelJuego nivelJuego
+        - Zona zona
+        - TipoNotificacion preferenciaNotificacion
+    }
+
+    class Partido {
+        - int id
+        - Deporte deporte
+        - int cupoRequerido
+        - int duracion
+        - Zona zona
+        - Instant fechaHora
+        - PartidoState estado
+        - List<Usuario> jugadores
+        - Set<int> jugadoresConfirmados
+        - int idCreador
+        - EmparejamientoStrategy estrategiaEmparejamiento
+        --
+        + void cambiarNecesitamosJugadores()
+        + void cambiarArmado()
+        + void cambiarConfirmado()
+        + void cambiarEnJuego()
+        + void cambiarFinalizado()
+        + void cambiarCancelado()
+    }
+
+    interface PartidoState {
+        + void cambiarNecesitamosJugadores()
+        + void cambiarArmado()
+        + void cambiarConfirmado()
+        + void cambiarEnJuego()
+        + void cambiarFinalizado()
+        + void cambiarCancelado()
+    }
+
+
+    class NecesitamosJugadoresState {
+        + void cambiarNecesitamosJugadores()
+        + void cambiarArmado()
+        + void cambiarConfirmado()
+        + void cambiarEnJuego()
+        + void cambiarFinalizado()
+        + void cambiarCancelado()
+    }
+
+    class ArmadoState {
+        + void cambiarNecesitamosJugadores()
+        + void cambiarArmado()
+        + void cambiarConfirmado()
+        + void cambiarEnJuego()
+        + void cambiarFinalizado()
+        + void cambiarCancelado()
+    }
+
+    class ConfirmadoState {
+        + void cambiarNecesitamosJugadores()
+        + void cambiarArmado()
+        + void cambiarConfirmado()
+        + void cambiarEnJuego()
+        + void cambiarFinalizado()
+        + void cambiarCancelado()
+    }
+
+    class EnJuegoState {
+        + void cambiarNecesitamosJugadores()
+        + void cambiarArmado()
+        + void cambiarConfirmado()
+        + void cambiarEnJuego()
+        + void cambiarFinalizado()
+        + void cambiarCancelado()
+    }
+
+    class FinalizadoState {
+        + void cambiarNecesitamosJugadores()
+        + void cambiarArmado()
+        + void cambiarConfirmado()
+        + void cambiarEnJuego()
+        + void cambiarFinalizado()
+        + void cambiarCancelado()
+    }
+
+    class CanceladoState {
+        + void cambiarNecesitamosJugadores()
+        + void cambiarArmado()
+        + void cambiarConfirmado()
+        + void cambiarEnJuego()
+        + void cambiarFinalizado()
+        + void cambiarCancelado()
+    }
+
+    class PartidoRepository {
+        - List<Partido> partidos
+        + Partido guardar(Partido partido)
+        + Partido buscarPorId(int id)
+        + List<Partido> listarTodos()
+        + List<Partido> buscar(BusquedaPartidosCriteria criteria)
+        + void eliminar(int id)
+    }
+
+    class UsuarioRepository {
+        - List<Usuario> usuarios
+        + Usuario guardar(Usuario usuario)
+        + Usuario buscarPorId(int id)
+        + Usuario buscarPorNombreUsuario(String nombreUsuario)
+        + Usuario buscarPorCorreo(String correo)
+        + List<Usuario> listarTodos()
+    }
+
+    class Notificacion implements INotificadorObserver {
+        - IEmailSenderStrategy enviadorEmail
+
+        + void notificarUsuario(Usuario usuario, String titulo, String cuerpo)
+    }
+
+    class JavaMailEmailAdapter implements IEmailSenderAdapter {
+        + void enviar(String destinatario, String asunto, String cuerpo)
+    }
+
+    class FirebasePushAdapter implements IPushSenderAdapter {
+        + void enviar(String token, String titulo, String cuerpo)
+    }
+
+    class PushSenderStrategy implements ISenderStrategy {
+        - IPushSenderAdapter adaptadorPushSender
+
+        + void enviar(String token, String titulo, String cuerpo)
+    }
+
+    class EmailSenderStrategy implements ISenderStrategy {
+        - IEmailSenderAdapter adaptadorEmailSender
+
+        + void enviar(String destinatario, String asunto, String cuerpo)
+    }
+
+    ' Clase abstracta TipoFiltro: Permite extender criterios de filtrado (ej: Exacto, Rango)
+    ' Usado en EmparejamientoPorNivel para flexibilizar la selección de jugadores
+    abstract class TipoFiltro {
+        + {abstract} String obtenerTipoFiltro()
+    }
+    
+    class Minimo extends TipoFiltro {
+        + String obtenerTipoFiltro()
+    }
+    
+    class Maximo extends TipoFiltro {
+        + String obtenerTipoFiltro()
+    }
+    
+    class EmparejamientoPorNivel implements EmparejamientoStrategy {
+        - NivelJuego nivelObjetivo
+        - TipoFiltro tipoFiltro
+        + List<Usuario> filtrarCandidatos(Partido partido, List<Usuario> candidatos)
+        + String obtenerNombreEstrategia()
+        + boolean cumpleCriterio(Usuario usuario, Partido partido)
+    }
+    
+    class EmparejamientoPorCercania implements EmparejamientoStrategy {
+        + List<Usuario> filtrarCandidatos(Partido partido, List<Usuario> candidatos)
+        + String obtenerNombreEstrategia()
+        + boolean cumpleCriterio(Usuario usuario, Partido partido)
+    }
+    
+    class EmparejamientoPorHistorial implements EmparejamientoStrategy {
+        + List<Usuario> filtrarCandidatos(Partido partido, List<Usuario> candidatos)
+        + String obtenerNombreEstrategia()
+        + boolean cumpleCriterio(Usuario usuario, Partido partido)
+    }
+    
+    class EmparejamientoStrategyFactory {
+        + EmparejamientoStrategy crear(String nombreEstrategia)
+    }
+
+    class CargarEstadisticasService {
+        - EstadisticasPartidoRepository repositorioEstadisticas
+        - PartidoRepository repositorioPartido
+        + EstadisticasPartido cargarEstadisticas(CargarEstadisticasCmd cmd, int usuarioId)
+        + EstadisticasPartido obtenerEstadisticas(int partidoId)
+    }
+    
+    
+    class EstadisticasPartido {
+        - int idPartido
+        - int golesPorJugador
+        - int tarjetasPorJugador
+    }
+
+    ' ========== INTERFACES ==========
+
+    interface INotificadorObserver {
+        + void notificarUsuario(Usuario usuario, String titulo, String cuerpo)
+    }
+
+    interface ISenderStrategy {
+        + void enviar(String destinatario, String titulo, String cuerpo)
+    }
+
+    interface IPushSenderAdapter {
+        + void enviar(String token, String titulo, String cuerpo)
+    }
+
+    interface IEmailSenderAdapter {
+        + void enviar(String destinatario, String asunto, String cuerpo)
+    }
+
+    interface EmparejamientoStrategy {
+        + List<Usuario> filtrarCandidatos(Partido partido, List<Usuario> candidatos)
+        + String obtenerNombreEstrategia()
+        + boolean cumpleCriterio(Usuario usuario, Partido partido)
+    }
+
+    ' ========== RELACIONES ==========
+
+
+    CrearPartidoServiceFacade "1..1" o-- "1..1" PartidoRepository : usa
+    CrearPartidoServiceFacade "1..1" o-- "1..1" UsuarioRepository : usa
+    CrearPartidoServiceFacade "1..1" o-- "1..1" INotificadorObserver : publica
+
+    UsuarioServiceFacade "1..1" o-- "1..1" UsuarioRepository : usa
+
+    BuscarPartidosServiceFacade "1..1" o-- "1..1" PartidoRepository : usa
+
+    GestionEstadoPartidoServiceFacade "1..1" o-- "1..1" PartidoRepository : usa
+    GestionEstadoPartidoServiceFacade "1..1" o-- "1..1" UsuarioRepository : usa
+    GestionEstadoPartidoServiceFacade "1..1" o-- "1..1" CargarEstadisticasService : usa
+
+    PartidoState <|.. NecesitamosJugadoresState : incluye
+    PartidoState <|.. ArmadoState : incluye
+    PartidoState <|.. ConfirmadoState : incluye
+    PartidoState <|.. EnJuegoState : incluye
+    PartidoState <|.. FinalizadoState : incluye
+    PartidoState <|.. CanceladoState : incluye
+
+    Usuario "1.." --> "*.." Partido :contiene
+    Usuario "1.." --> "1.." Deporte :contiene
+    Usuario "1.." --> "1.." NivelJuego :contiene
+    Usuario "1.." --> "1.." Zona :contiene
+    Usuario "1.." --> "1.." TipoNotificacion :contiene
+
+    Partido "1.." --> "1.." Deporte :contiene
+    Partido "1.." --> "1.." Zona :contiene
+    Partido "1.." --> "1.." PartidoState :contiene
+    Partido --- EmparejamientoStrategyFactory 
+    Partido o-- "1.." EmparejamientoStrategy : usa
+
+    Notificacion o-- "1..1" ISenderStrategy : usa
+
+    EmailSenderStrategy <|.. IEmailSenderAdapter
+    PushSenderStrategy <|.. IPushSenderAdapter
+
+    GestionEstadoPartidoServiceFacade o-- "1..1" INotificadorObserver : publica
+
+    EmparejamientoPorNivel --> TipoFiltro : tipoFiltro
+    EmparejamientoPorNivel --> NivelJuego : nivelObjetivo
+    EmparejamientoStrategyFactory ..> EmparejamientoStrategy : crea
+
+    EstadisticasPartido "1..1" --* "1..1" Partido : contiene
+
+    CargarEstadisticasService "1..1" --* "1..1" EstadisticasPartido : usa
+    CargarEstadisticasService "1..1" --* "1..1" PartidoRepository : usa
+}
+
+
+namespace vistas {
+   class VentanaPrincipal {
+       - PanelLogin panelLogin
+       - PanelBuscarPartidos panelBuscarPartidos
+       - PanelMisPartidos panelMisPartidos
+       - PanelCrearPartido panelCrearPartido
+       - PanelGestionEstado panelGestionEstado
+       + void mostrarPanel()
+   }
+
+   class PanelLogin {
+       - RegistroController controladorRegistro
+       - AuthController controladorAuth
+       + void iniciarSesion(String nombreUsuario, String contrasena)
+       + void registrar(RegistrarUsuarioCmd cmd)
+       + void verificarPartidosPendientes()
+   }
+
+   class PanelBuscarPartidos {
+       - PartidosController controladorPartidos
+       + void refrescar()
+       + void buscar(BusquedaPartidosCriteria criteria)
+       + void unirse(int partidoId)
+   }
+
+   class PanelCrearPartido {
+       - CrearPartidoController controladorCrearPartido
+
+       + void crearPartido(CrearPartidoCmd cmd)
+   }
+
+   class PanelGestionEstado {
+       - GestionEstadoController controladorGestionEstado
+       + void confirmar(int partidoId)
+   }
+
+    class PanelMisPartidos {
+        - PartidosController controladorPartidos
+        - EstadisticasController controladorEstadisticas
+        - VentanaPrincipal ventanaPrincipal
+        + void refrescar()
+        + void cargarMisPartidos()
+        + void confirmarPartidoSeleccionado(int partidoId)
+        + void cancelarPartidoSeleccionado(int partidoId)
+        + void agregarEstadistica(int partidoId)
+    }
+}
+
+vistas.VentanaPrincipal "1.." --> "1.." vistas.PanelLogin : muestra
+vistas.VentanaPrincipal "1.." --> "1.." vistas.PanelCrearPartido : muestra
+vistas.VentanaPrincipal "1.." --> "1.." vistas.PanelGestionEstado : muestra
+vistas.VentanaPrincipal "1.." --> "1.." vistas.PanelBuscarPartidos : muestra
+vistas.VentanaPrincipal "1.." --> "1.." vistas.PanelMisPartidos : muestra
+
+
+vistas.PanelLogin "1.." --> "1.." controladores.RegistroController : se comunica
+vistas.PanelLogin "1.." --> "1.." controladores.AuthController : se comunica
+vistas.PanelBuscarPartidos "1.." --> "1.." controladores.PartidosController : se comunica
+vistas.PanelCrearPartido "1.." --> "1.." controladores.CrearPartidoController : se comunica
+vistas.PanelGestionEstado "1.." --> "1.." controladores.GestionEstadoController : se comunica
+vistas.PanelMisPartidos "1.." --> "1.." controladores.PartidosController : se comunica
+vistas.PanelMisPartidos "1.." --> "1.." controladores.EstadisticasController : consulta estadísticas
+
+servicios.UsuarioRepository "1.." *-- "*.." servicios.Usuario : guarda
+servicios.PartidoRepository "1.." *-- "*.." servicios.Partido : guarda
+
+@enduml
